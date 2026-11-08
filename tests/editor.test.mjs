@@ -1,0 +1,15 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { emptyDocument, snap, validateLevel } from '../src/editor/rules.mjs';
+const object = (id = 'a', x = 14) => ({ id, type: 'cube', x, y: 0, width: 1, height: 1, rotation: 0 });
+const draft = (objects = []) => ({ title: 'Mi nivel', description: '', difficulty: 'Normal', content: { ...emptyDocument(), objects } });
+test('Borrador vacío permitido pero no publicable', () => { assert.deepEqual(validateLevel(draft()), []); assert.ok(validateLevel(draft(), true).length); });
+test('Nivel simple cumple publicación', () => { assert.deepEqual(validateLevel(draft([object()]), true), []); });
+test('Cuadrícula cuantiza a 0.5', () => { assert.equal(snap(2.2), 2); assert.equal(snap(2.4), 2.5); });
+test('IDs duplicados se rechazan', () => { assert.ok(validateLevel(draft([object(), object('a', 20)])).some(e => e.includes('duplicado'))); });
+test('No permite tipo ejecutable ni rotación', () => { assert.ok(validateLevel(draft([{ ...object(), type: 'script' }])).length); assert.ok(validateLevel(draft([{ ...object(), rotation: 90 }])).length); });
+test('Zonas de inicio y meta reservadas', () => { assert.ok(validateLevel(draft([object('a', 3)])).length); assert.ok(validateLevel(draft([object('a', 297)])).length); });
+test('Sólidos contiguos permitidos, superpuestos rechazados', () => { assert.deepEqual(validateLevel(draft([object(), object('b', 15)])), []); assert.ok(validateLevel(draft([object(), object('b', 14.5)])).length); });
+test('Restricciones de altura, escala y velocidad', () => { assert.ok(validateLevel(draft([{ ...object(), y: 30 }])).length); assert.ok(validateLevel(draft([{ ...object(), width: 5 }])).length); const d = draft(); d.content.speedMultiplier = 2; assert.ok(validateLevel(d).length); });
+test('2001 objetos se rechazan', () => { assert.ok(validateLevel(draft(Array.from({ length: 2001 }, (_, i) => object(String(i), i + 10)))).length); });
+test('Plataforma permite apoyo sin solapamiento', () => { assert.deepEqual(validateLevel(draft([{ ...object(), type: 'platform', width: 4, height: .5 }, { ...object('b'), y: .5 }])), []); });

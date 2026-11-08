@@ -1,0 +1,23 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createWorld, stepWorld, advanceFrame, demoDocument, DT } from '../src/game/engine.mjs';
+const document = (objects = []) => ({ schemaVersion: 1, physicsVersion: 1, length: 100, speedMultiplier: 1, spawn: { x: 2, y: 0 }, finishX: 98, objects });
+const cube = (x, y = 0) => ({ id: 'a', type: 'cube', x, y, width: 1, height: 1, rotation: 0 });
+test('Inicio y avance a 6 unidades/s, física 120 Hz', () => { const doc = document(); const start = createWorld(doc); const next = stepWorld(start, doc); assert.equal(start.x, 2); assert.equal(next.x, 2.05); assert.equal(next.ticks, 1); assert.equal(next.y, 0); });
+test('Un salto no acepta otro impulso en el aire', () => { const doc = document(); const first = stepWorld(createWorld(doc), doc, true); const second = stepWorld(first, doc, true); assert.ok(first.y > 0); assert.ok(second.vy < first.vy); });
+test('Sin nuevas pulsaciones, aterriza y se queda en el piso', () => { const doc = document(); let world = stepWorld(createWorld(doc), doc, true); for (let i = 0; i < 240; i++) world = stepWorld(world, doc); assert.equal(world.y, 0); assert.equal(world.grounded, true); });
+test('Golpear cara lateral de cubo mata', () => { const doc = document([cube(3)]); let world = createWorld(doc); for (let i = 0; i < 10; i++) world = stepWorld(world, doc); assert.equal(world.outcome, 'Dead'); });
+test('Aterrizar en la cara superior proporciona apoyo', () => { const doc = document([cube(3)]); const world = { ...createWorld(doc), x: 3, y: 1.005, vy: -2, grounded: false }; const next = stepWorld(world, doc); assert.equal(next.y, 1); assert.equal(next.grounded, true); assert.equal(next.outcome, null); });
+test('Cara inferior de plataforma mata', () => { const doc = document([{ ...cube(3, 1), type: 'platform', width: 4, height: .5 }]); const world = { ...createWorld(doc), x: 3, y: .25, vy: 2, grounded: false }; assert.equal(stepWorld(world, doc).outcome, 'Dead'); });
+test('Triángulo usa geometría, permite la esquina vacía de su caja', () => { const doc = document([{ ...cube(3), type: 'triangle' }]); const world = { ...createWorld(doc), x: 2.21, y: .95, vy: 0, grounded: false }; assert.equal(stepWorld(world, doc).outcome, null); });
+test('Contacto con geometría del triángulo mata', () => { const doc = document([{ ...cube(3), type: 'triangle' }]); const world = { ...createWorld(doc), x: 2.8, y: 0 }; assert.equal(stepWorld(world, doc).outcome, 'Dead'); });
+test('Colisión mortal gana al cruce de meta', () => { const doc = { ...document([cube(3)]), finishX: 3 }; const world = { ...createWorld(doc), x: 2.99 }; const result = stepWorld(world, doc); assert.equal(result.outcome, 'Dead'); assert.ok(result.progress < 100); });
+test('Cruzar meta vivo completa y los estados terminales son inmutables', () => { const doc = document(); const world = { ...createWorld(doc), x: 97.99 }; const result = stepWorld(world, doc); assert.equal(result.outcome, 'Completed'); assert.equal(result.progress, 100); assert.equal(stepWorld(result, doc), result); });
+test('Distintas frecuencias de dibujo dan la misma simulación', () => {
+  const doc = document(); const worlds = [30, 60, 144].map(rate => { let world = createWorld(doc); let accumulator = 0; for (let i = 0; i < rate * 10; i++) { const result = advanceFrame(world, doc, 1 / rate, accumulator); world = result.world; accumulator = result.accumulator; } return world; });
+  assert.equal(worlds[0].ticks, 1200); assert.deepEqual(worlds[0], worlds[1]); assert.deepEqual(worlds[1], worlds[2]);
+});
+test('Frame atrasado pausa sin avanzar ni teletransportar', () => { const doc = document(); const world = createWorld(doc); const result = advanceFrame(world, doc, 1, 0, true); assert.equal(result.unstable, true); assert.equal(result.world, world); assert.equal(result.world.ticks, 0); });
+test('Un pulso de salto persiste hasta un tick de simulación', () => { const doc = document(); const world = createWorld(doc); const first = advanceFrame(world, doc, DT / 2, 0, true); assert.equal(first.consumedJump, false); const second = advanceFrame(first.world, doc, DT / 2, first.accumulator, true); assert.ok(second.world.y > 0); assert.equal(second.consumedJump, true); });
+test('Versión de físicas desconocida se rechaza', () => { assert.throws(() => createWorld({ ...document(), physicsVersion: 9 })); });
+test('Recorrido demo usa solo objetos del alcance', () => { assert.ok(demoDocument().objects.every(o => ['cube', 'triangle', 'platform'].includes(o.type))); });
