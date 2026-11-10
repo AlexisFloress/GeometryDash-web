@@ -99,7 +99,7 @@ export function GameView({ document, levelId, revisionId, practice = false }: { 
     <div className="actions"><button className="secondary" disabled={state !== 'Running' && state !== 'Countdown'} onClick={pause}>Pausar</button><button className="secondary" disabled={state !== 'Paused'} onClick={() => finish('Quit')}>Terminar intento</button><label>Tecla de salto<select value={jumpKey} disabled={state === 'Running' || state === 'Countdown'} onChange={e => { setJumpKey(e.target.value); writeLocal('gd:jump-key', e.target.value); }}><option value="Space">Espacio</option><option value="KeyW">W</option><option value="ArrowUp">Flecha arriba</option></select></label></div>
     <p role="status">{sync}</p>{pending.current && session && <button disabled={sending} onClick={() => void transmit(pending.current!, session.user.id)}>Reintentar guardar resultado</button>}{!!error && <ErrorBox error={error}/>}
     {session && oldPending.filter(p => p.attemptId !== pending.current?.attemptId).length > 0 && <details><summary>Resultados anteriores pendientes</summary>{oldPending.filter(p => p.attemptId !== pending.current?.attemptId).map(item => <p key={item.attemptId}>{item.result.outcome} · {item.result.progressPercent}% <button className="secondary" disabled={sending} onClick={async () => { setSending(true); try { await sendPending(session.user.id, item); setOldPending(readPending(session.user.id)); } catch (err) { setError(new Error(errorText(err))); } finally { setSending(false); } }}>Reintentar</button></p>)}</details>}
-    <p className="small muted">Se pausa al perder el foco o esconder la pestaña. Los resultados guardados son reportados por el cliente, sin verificación de replay.</p></div>;
+    </div>;
 }
 function PublicGame({ id }: { id: string }) {
   const resource = useResource<ContentResponse>(`/levels/${id}/content`);
@@ -108,5 +108,5 @@ function PublicGame({ id }: { id: string }) {
 const demo = demoDocument();
 export default function GamePage() {
   const { id } = useParams();
-  return <section><div className="section-heading"><div><p className="eyebrow">CONCENTRACIÓN. RITMO. OTRO INTENTO.</p><h1>{id === 'demo' ? 'Recorrido de práctica' : 'A jugar'}</h1></div><Link to={id === 'demo' ? '/' : `/levels/${id}`}>← Salir del juego</Link></div>{id === 'demo' ? <GameView document={demo} practice/> : <PublicGame id={id!}/>}</section>;
+  return <section><div className="section-heading"><div><h1>{id === 'demo' ? 'Recorrido de práctica' : 'A jugar'}</h1></div><Link to={id === 'demo' ? '/' : `/levels/${id}`}>← Salir del juego</Link></div>{id === 'demo' ? <GameView document={demo} practice/> : <PublicGame id={id!}/>}</section>;
 }
