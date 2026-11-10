@@ -15,7 +15,7 @@ El código se organiza en dos repositorios independientes:
 | Repositorio sugerido | Carpeta local actual | Responsabilidad |
 | --- | --- | --- |
 | geometrydash-frontend | GeometryDash-web | Interfaz React, editor y juego Canvas |
-| geometrydash-backend | backend | API ASP.NET Core, permisos, persistencia y migraciones |
+| geometrydash-backend | GeometryDash-backend | API ASP.NET Core, permisos, persistencia y migraciones |
 
 PostgreSQL es el tercer componente que debes ejecutar o contratar. Su servicio y sus datos no son un tercer repositorio de código fuente: el backend contiene el esquema, pero no se suben los archivos internos de la base a Git.
 
@@ -173,7 +173,7 @@ Para migrar necesitas una identidad con permisos de cambio de esquema. Aplica la
 
 ### Paso 3: construir y configurar la API
 
-Desde backend:
+Desde GeometryDash-backend:
 
 ```powershell
 dotnet publish GeometryDash.Api -c Release -o artifacts/api

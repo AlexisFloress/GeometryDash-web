@@ -16,6 +16,7 @@ export default function Editor() {
   const [value, setValue] = useState<Editable | null>(null); const valueRef = useRef<Editable | null>(null); const saved = useRef('');
   const [loading, setLoading] = useState(true); const [error, setError] = useState<unknown>(null); const [dirty, setDirty] = useState(false); const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState(''); const [recovery, setRecovery] = useState<Backup | null>(null); const [conflict, setConflict] = useState(false); const [review, setReview] = useState(false);
+  const [saveFeedback, setSaveFeedback] = useState('');
   const [testing, setTesting] = useState<Editable | null>(null); const [publishing, setPublishing] = useState(false); const [errors, setErrors] = useState<string[]>([]);
   const [tool, setTool] = useState<'select' | LevelObject['type']>('select'); const [selected, setSelected] = useState<string | null>(null);
   const [viewX, setViewX] = useState(0); const [viewY, setViewY] = useState(0); const [zoom, setZoom] = useState(32); const canvas = useRef<HTMLCanvasElement>(null);
@@ -30,12 +31,13 @@ export default function Editor() {
     setStatus(ok ? 'Cambios locales' : 'Cambios sin guardar: no se pudo crear copia local. Descarga el JSON.');
   }
   function change(next: Editable, record = true) {
+    setSaveFeedback('');
     if (record && valueRef.current) { past.current.push(structuredClone(valueRef.current)); past.current = past.current.slice(-60); future.current = []; }
     valueRef.current = next; setValue(next); setDirty(JSON.stringify(next) !== saved.current); autoBlocked.current = conflict;
     store(next); updateHistory(n => n + 1); setErrors([]);
   }
   async function load(checkBackup = true) {
-    setLoading(true); setError(null);
+    setLoading(true); setError(null); setSaveFeedback('');
     try {
       let draft: Draft;
       try { draft = await api<Draft>(`/levels/${id}/draft`); }
@@ -69,6 +71,16 @@ export default function Editor() {
       setStatus('No se pudo guardar · se conserva la copia local'); setError(err); throw err;
     } finally { inFlight.current = null; setSaving(false); }
   }
+  async function saveManually() {
+    setError(null); setSaveFeedback('');
+    const alreadySaved = JSON.stringify(valueRef.current) === saved.current;
+    try {
+      await save();
+      setSaveFeedback(JSON.stringify(valueRef.current) !== saved.current
+        ? 'Se guardó una versión anterior. Hay cambios recientes pendientes de guardar.'
+        : alreadySaved ? 'No hay cambios pendientes: el nivel ya estaba guardado en el servidor.' : 'Nivel guardado en el servidor.');
+    } catch (err) { setError(err); }
+  }
   useEffect(() => {
     if (!dirty || recovery || conflict || publishing || saving || autoBlocked.current) return;
     const timer = setTimeout(() => { void save().catch(() => {}); }, 2000); return () => clearTimeout(timer);
@@ -100,7 +112,8 @@ export default function Editor() {
   const disabled = publishing || !!recovery;
   if (loading) return <p role="status">Abriendo editor…</p>;
   if (!value || !base) return <ErrorBox error={error ?? new Error('Borrador no disponible.')} retry={() => void load()}/>;
-  return <section className="editor"><div className="section-heading"><div><p className="eyebrow">TU TALLER DE RECORRIDOS</p><h1>Editor de nivel</h1><p role="status" className="small muted">{status} · revisión {base.revisionNumber}</p></div><div className="actions"><button className="secondary" disabled={saving || disabled || conflict} onClick={() => void save().catch(setError)}>Guardar</button><button className="secondary" disabled={disabled} onClick={() => { const invalid = validateLevel(value); setErrors(invalid); if (!invalid.length) setTesting(structuredClone(value)); }}>Probar</button><button disabled={disabled || saving || conflict} onClick={() => { const invalid = validateLevel(value, true); setErrors(invalid); if (!invalid.length) setReview(true); }}>Publicar →</button></div></div>
+  return <section className="editor"><div className="section-heading"><div><p className="eyebrow">TU TALLER DE RECORRIDOS</p><h1>Editor de nivel</h1><p role="status" className="small muted">{status} · revisión {base.revisionNumber}</p></div><div className="actions"><button className="secondary" disabled={saving || disabled || conflict} onClick={() => void saveManually()}>{saving ? 'Guardando…' : 'Guardar'}</button><button className="secondary" disabled={disabled} onClick={() => { const invalid = validateLevel(value); setErrors(invalid); if (!invalid.length) setTesting(structuredClone(value)); }}>Probar</button><button disabled={disabled || saving || conflict} onClick={() => { const invalid = validateLevel(value, true); setErrors(invalid); if (!invalid.length) setReview(true); }}>Publicar →</button></div></div>
+    {saveFeedback && <div className="notice" role="status">{saveFeedback}</div>}
     {!!error && <ErrorBox error={error}/>}{recovery && <div className="notice"><h2>Encontramos una copia local</h2><p>Guardada {new Date(recovery.updatedAt).toLocaleString('es')}. {recovery.baseVersion !== base.version ? 'La versión remota cambió. Revisa la copia antes de reemplazarla.' : 'Puedes recuperar tus cambios sin sincronizar.'}</p><div className="actions"><button onClick={() => { const local = recovery.editable; const stale = recovery.baseVersion !== base.version; setRecovery(null); change(local); if (stale) { setConflict(true); autoBlocked.current = true; } }}>Revisar copia local</button><button className="secondary" onClick={() => { download('copia-local.json', recovery.editable); }}>Descargar copia</button><button className="secondary" onClick={() => { removeLocal(backupKey.current); setRecovery(null); }}>Usar versión remota</button></div></div>}
     {conflict && <div className="notice danger"><h2>Otra pestaña guardó cambios</h2><p>Tu copia se conserva. Descárgala antes de cargar la versión remota; no se mezclan automáticamente.</p><div className="actions"><button className="secondary" onClick={() => download('conflicto-nivel.json', value)}>Descargar mis cambios</button><button onClick={() => { removeLocal(backupKey.current); void load(false); }}>Descartar cambios y recargar</button></div></div>}
     {!!errors.length && <div className="notice danger" role="alert"><h2>Revisa el nivel</h2><ul>{errors.slice(0, 15).map((message, i) => <li key={i}>{message}</li>)}</ul></div>}
