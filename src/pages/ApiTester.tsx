@@ -4,7 +4,7 @@ import { useAuth } from '../auth';
 import { errorText, setSession } from '../lib/api';
 import type { Session } from '../types';
 
-export type TestOperation = { method: string; path: string; summary?: string };
+export type TestOperation = { method: string; path: string; summary?: string; example?: unknown; headers?: Record<string, string> };
 
 export default function ApiTester({ selection }: { selection: TestOperation | null }) {
   const { session, update } = useAuth();
@@ -22,7 +22,10 @@ export default function ApiTester({ selection }: { selection: TestOperation | nu
 
   useEffect(() => {
     if (!selection) return;
-    setMethod(selection.method); setPath(selection.path); setBody(''); setEtag(''); setIdempotencyKey('');
+    setMethod(selection.method); setPath(selection.path);
+    setBody(selection.example === undefined ? '' : JSON.stringify(selection.example, null, 2));
+    setEtag(selection.headers?.['If-Match'] ?? '');
+    setIdempotencyKey(selection.headers?.['Idempotency-Key'] ? crypto.randomUUID() : '');
     section.current?.scrollIntoView({ behavior: 'smooth' }); pathInput.current?.focus({ preventScroll: true });
   }, [selection]);
 
@@ -78,7 +81,7 @@ export default function ApiTester({ selection }: { selection: TestOperation | nu
         <label>Versión del borrador (If-Match)<input value={etag} onChange={event => setEtag(event.target.value)} placeholder={'"1"'}/></label>
         <label>Clave para evitar crear duplicados (Idempotency-Key)<input value={idempotencyKey} onChange={event => setIdempotencyKey(event.target.value)} placeholder="UUID requerido al crear un nivel"/></label>
         <button type="button" className="secondary" onClick={() => setIdempotencyKey(crypto.randomUUID())}>Generar clave</button>
-        <label>Datos de la solicitud (JSON)<textarea rows={8} value={body} onChange={event => setBody(event.target.value)} spellCheck={false} placeholder={'{"email":"tu-correo@example.com","password":"TuContraseña"}'}/></label>
+        <label>Datos de la solicitud (JSON)<textarea rows={12} value={body} onChange={event => setBody(event.target.value)} spellCheck={false} placeholder="Selecciona un endpoint para cargar su ejemplo. Si no recibe JSON, deja este campo vacío."/></label>
         <p>Puedes iniciar sesión enviando tu correo y contraseña a <code>POST /api/v1/auth/login</code>. El probador usará esa sesión para las siguientes solicitudes; la clave de acceso se guarda en memoria durante la visita.</p>
         <button type="submit">{pending ? 'Enviando…' : 'Enviar solicitud'}</button>
       </fieldset>
